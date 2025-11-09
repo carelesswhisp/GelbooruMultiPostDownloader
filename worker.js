@@ -93,24 +93,72 @@ chrome.runtime.onConnect.addListener(port => {
                     if(message.type === "cpgl"){
                         port.postMessage({ type: "action", action: "clipboardWriteText", data: { content: posttabs.map(tab => tab.url).join("\n") } })
                         setInfobox("Gelbooru post links copied to clipboard ;>>")
-                    } else if(message.type === "dgpi"){
-                        const fposttabs = [...new Set(posttabs.map(tab => parseURIParameters(tab.url).id))]
+                    
+                    
+                    
+                        } else if(message.type === "dgpi"){
+                        const fposttabs = [...new Set(posttabs.map(tab => parseURIParameters(tab.url).id))];
                         
-                        fposttabs.forEach(id => {
-                            fetch(`${baseuri}/index.php?page=dapi&s=post&q=index&id=${id}&json=1`, { method: "GET" }).then(res => res.json()).then(res => {
-                                const image_uri = res.post[0].file_url
-                                const image_ext = image_uri.substring(image_uri.lastIndexOf('/') + 1).split(".")
-        
-                                chrome.downloads.download({ url: image_uri, filename: `gelbooru_${res.post[0].id}${image_ext[1] ? `.${image_ext[1]}` : ""}` }).catch(throwError)
-                            }).catch(throwError)
-                        })
+                        if (fposttabs.length === 0) {
+                            return throwWarning("No valid Gelbooru post tabs found to download.");
+                        }
 
-                        setInfobox(`Downloading ${posttabs.length} post images...`)
-                    } else if(message.type === "closetabs"){
-                        posttabs.forEach(tab => chrome.tabs.remove(tab.id))
-                        
-                        setInfobox("Closed all the post tabs.")
+                        // This async function processes downloads one by one.
+                        const downloadManager = async (ids) => {
+                            chrome.storage.local.get(['api_credentials'], async (storage) => {
+                                if (!storage.api_credentials) {
+                                    return throwError("API credential string not saved. Please check extension settings.");
+                                }
+                                const id = ids.shift(); 
+                                try {
+                                    
+                                    const authenticatedUrl = `${baseuri}/index.php?page=dapi&s=post&q=index&json=1&id=${id}${storage.api_credentials}`;
+                                    
+                                    const response = await fetch(authenticatedUrl);
+
+                                    if (!response.ok) {
+                                        const errorText = await response.text();
+                                        throw new Error(`HTTP ${response.status}. Server: ${errorText.substring(0, 200)}`);
+                                    }
+
+                                    const data = await response.json();
+
+                                    if (!data || !data.post || !data.post.length === 0) {
+                                        throw new Error(`API returned no 'post' data.`);
+                                    }
+                                    const post = data.post[0];
+                                    const imageUrl = post.file_url;
+                                    const fileExtension = imageUrl.substring(imageUrl.lastIndexOf('.'));
+                                    const filename = `gelbooru_${post.id}_${post.md5}${fileExtension}`;
+                                    
+                                    chrome.downloads.download({ url: imageUrl, filename: filename }).catch(throwError);
+                                    setInfobox(`Downloading: ${filename}`);
+
+                                    if (ids.length > 0) {
+                                        setTimeout(() => downloadManager(ids), 500);
+                                    } else {
+                                        setInfobox("All downloads completed!");
+                                        chrome.storage.local.get('autoclosetabs', options => {
+                                           if (options.autoclosetabs) {
+                                               posttabs.forEach(tab => chrome.tabs.remove(tab.id));
+                                           }
+                                        });
+                                    }
+
+                                } catch (error) {
+                                    throwError(`Download failed on ID ${id}: ${error.message}`);
+                                }
+                            });
+                        };
+
+                        // Start the download manager.
+                        downloadManager(fposttabs);
+
+
+
+
                     }
+
 
                     if(message.type !== "closetabs" && options.autoclosetabs){
                         posttabs.forEach(tab => chrome.tabs.remove(tab.id))
