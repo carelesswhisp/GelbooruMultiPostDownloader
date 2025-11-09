@@ -1,5 +1,30 @@
 const port = chrome.runtime.connect()
+document.addEventListener("DOMContentLoaded", () => {
+    // Load the saved credential string and display it on startup
+    chrome.storage.local.get(['api_credentials'], (result) => {
+        if (result.api_credentials) {
+            document.getElementById('api_creds_input').value = result.api_credentials;
+        }
+    });
 
+    // Add a click listener for the "Save Credentials" button
+    document.getElementById("save_creds_btn").addEventListener("click", () => {
+        const creds = document.getElementById("api_creds_input").value;
+
+        // Check that the user has pasted something that looks correct
+        if (creds && creds.includes('&api_key=') && creds.includes('&user_id=')) {
+            chrome.storage.local.set({ api_credentials: creds }, () => {
+                const btn = document.getElementById("save_creds_btn");
+                btn.textContent = "Saved!";
+                setTimeout(() => { btn.textContent = "Save Credentials"; }, 2000);
+            });
+        } else {
+            const btn = document.getElementById("save_creds_btn");
+            btn.textContent = "Invalid Format! Paste the full string.";
+            setTimeout(() => { btn.textContent = "Save Credentials"; }, 3000);
+        }
+    });
+});
 const infobox = document.getElementById("infobox")
 const cpgl = document.getElementById("cpgl")
 const dgpi = document.getElementById("dgpi")
