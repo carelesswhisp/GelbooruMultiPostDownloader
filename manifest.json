@@ -19,7 +19,8 @@
     ],
     "host_permissions": [
         "https://gelbooru.com/**/*",
-        "https://img3.gelbooru.com/**/*"
+        "https://img4.gelbooru.com/**/*",
+	"https://img3.gelbooru.com/**/*"
     ],
     "action": {
         "default_popup": "popup.html"
